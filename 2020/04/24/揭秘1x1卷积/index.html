@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 4.2.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"yshanyes.club","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"post","padding":18,"offset":12,"onmobile":false},"copycode":{"enable":true,"show_result":true,"style":null},"back2top":{"enable":true,"sidebar":false,"scrollpercent":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="1. 卷积核（convolutional kernel）：可以看作对某个局部的加权求和；它是对应局部感知，它的原理是在观察某个物体时我们既不能观察每个像素也不能一次观察整体，而是先从局部开始认识，这就对应了卷积。卷积核的大小一般有1x1,3x3和5x5的尺寸（一般是奇数x奇数）。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="揭秘1x1卷积">
+<meta property="og:url" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/index.html">
+<meta property="og:site_name" content="양샨博客">
+<meta property="og:description" content="1. 卷积核（convolutional kernel）：可以看作对某个局部的加权求和；它是对应局部感知，它的原理是在观察某个物体时我们既不能观察每个像素也不能一次观察整体，而是先从局部开始认识，这就对应了卷积。卷积核的大小一般有1x1,3x3和5x5的尺寸（一般是奇数x奇数）。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/cnn.png">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/1587537934285.png">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/1587539479325.png">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/1587632629276.png">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/inception.png">
+<meta property="og:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/resnet.png">
+<meta property="article:published_time" content="2020-04-24T03:12:09.000Z">
+<meta property="article:modified_time" content="2020-04-26T03:01:10.654Z">
+<meta property="article:author" content="양샨">
+<meta property="article:tag" content="卷积">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/cnn.png">
+
+<link rel="canonical" href="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'zh-CN'
+  };
+</script>
+
+  <title>揭秘1x1卷积 | 양샨博客</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">양샨博客</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+      <p class="site-subtitle" itemprop="description">爱咋咋地</p>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a>
+
+  </li>
+        <li class="menu-item menu-item-about">
+
+    <a href="/about/" rel="section"><i class="fa fa-user fa-fw"></i>关于</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签<span class="badge">2</span></a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类<span class="badge">2</span></a>
+
+  </li>
+        <li class="menu-item menu-item-archives">
+
+    <a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档<span class="badge">2</span></a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+  <a href="https://github.com/yshanyes" class="github-corner" title="Follow me on GitHub" aria-label="Follow me on GitHub" rel="noopener" target="_blank"><svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"><path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://yshanyes.club/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/6.ico">
+      <meta itemprop="name" content="양샨">
+      <meta itemprop="description" content="爱咋咋地">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="양샨博客">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          揭秘1x1卷积
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+
+              <time title="创建时间：2020-04-24 11:12:09" itemprop="dateCreated datePublished" datetime="2020-04-24T11:12:09+08:00">2020-04-24</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">更新于</span>
+                <time title="修改时间：2020-04-26 11:01:10" itemprop="dateModified" datetime="2020-04-26T11:01:10+08:00">2020-04-26</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">分类于</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0/" itemprop="url" rel="index"><span itemprop="name">深度学习</span></a>
+                </span>
+            </span>
+
+          
+            <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv" style="display: none;">
+              <span class="post-meta-item-icon">
+                <i class="eye"></i>
+              </span>
+              <span class="post-meta-item-text">阅读次数：</span>
+              <span id="busuanzi_value_page_pv"></span>
+            </span><br>
+            <span class="post-meta-item" title="本文字数">
+              <span class="post-meta-item-icon">
+                <i class="far fa-file-word"></i>
+              </span>
+                <span class="post-meta-item-text">本文字数：</span>
+              <span>4.2k</span>
+            </span>
+            <span class="post-meta-item" title="阅读时长">
+              <span class="post-meta-item-icon">
+                <i class="far fa-clock"></i>
+              </span>
+                <span class="post-meta-item-text">阅读时长 &asymp;</span>
+              <span>4 分钟</span>
+            </span>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><strong>1. 卷积核（convolutional kernel）：</strong>可以看作对某个局部的加权求和；它是对应局部感知，它的原理是在观察某个物体时我们既不能观察每个像素也不能一次观察整体，而是先从局部开始认识，这就对应了卷积。卷积核的大小一般有1x1,3x3和5x5的尺寸（一般是奇数x奇数）。</p>
+<a id="more"></a>
+<p>卷积核的个数就对应输出的通道数，这里需要说明的是对于输入的每个通道，输出每个通道上的卷积核是不一样的。比如输入是28x28x192(WxHxK,K代表通道数)，然后在3x3的卷积核，卷积通道数为128，那么卷积的参数有3x3x192x128,其中前两个对应的每个卷积里面的参数，后两个对应的卷积总的个数（一般理解为，<a href="https://www.zhihu.com/question/47158818" target="_blank" rel="noopener">卷积核的权值共享</a>只在每个单独通道上有效，至于通道与通道间的对应的卷积核是独立不共享的，所以这里是192x128）。</p>
+<p><strong>2. 池化（pooling）：</strong>卷积特征往往对应某个局部的特征。要得到global的特征需要将全局的特征就行一个aggregation。池化就是这样一个操作，对于每个卷积通道，将更大尺寸（甚至是global）上的卷积特征进行pooling就可以得到更有全局性的特征。这里的pooling当然就对应了cross region。</p>
+<p>与1x1的卷积相对应，后者可以看作一个cross channel的pooling操作。pooling的另外一个作用就是升维或者降维，后面我们可以看到1x1的卷积也有相似的作用。</p>
+<img src="/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/cnn.png" class="" title="This is an image">
+
+<blockquote>
+<p><strong>ref:</strong><a href="https://blog.csdn.net/a1154761720/java/article/details/53411365" target="_blank" rel="noopener">1*1的卷积核与Inception</a><br><strong>ref:</strong><a href="https://zhuanlan.zhihu.com/p/40050371" target="_blank" rel="noopener">一文读懂卷积神经网络中的1x1卷积核</a><br><strong>ref:</strong><a href="https://www.zhihu.com/question/47158818" target="_blank" rel="noopener">如何理解卷积神经网络中的权值共享？</a><br> <strong>ref:</strong> <a href="https://cs231n.github.io/convolutional-networks/。" target="_blank" rel="noopener">https://cs231n.github.io/convolutional-networks/。</a></p>
+</blockquote>
+<p>1x1卷积又称为Network in Network，得到了广泛应用。</p>
+<p>对于n&gt;1的卷积核，我们通常还要考虑pad(边缘补0的个数)，stride（每次卷积移动的步长）。但是当尺寸是1x1时，对于single channel而言就相当于对原特征的scala操作；但是我们一般遇到的都是multi-channel的情况，此时我们便可以根据自己的需要定义卷积核的个数，从而进行降（升）维。如上面所说，如果将它看作cross channel的pooling 操作，它还能帮我们得到在同一位置不同通道之间进行特征的aggregation。</p>
+<p>总结一下，1x1的卷积核可以进行降维或者升维，也就是通过控制卷积核（通道数）实现，这个可以帮助减少模型参数，也可以对不同特征进行尺寸的归一化；同时也可以用于不同channel上特征的融合。<br>输入一张6x6x1的图片（矩阵、feature map），然后对它做卷积，卷积为1x1x1，结果相当于对图片乘一个常数2，对1个通道的图片来说，1x1卷积效果不佳。</p>
+<p>如果是一张6x6x32的图片，那么使用1x1卷积的效果更好。1x1卷积实现的功能即是遍历6x6个单元格，计算左图中32个数字和滤波器中32个数字的元素积之和，然后经过非线性函数（ReLU）。</p>
+<p>1x1卷积可以从根本上理解为对</p>
+<p>对于单通道的feature map和单个卷积核之间的卷积来说,1X1卷积核就是对输入的一个比例缩放，因为1X1卷积核只有一个参数，这个核在输入上滑动，就相当于给输入数据乘以一个系数。对于多通道而言有一个重要的功能，就是可以在保持feature map 尺寸不变（即不损失分辨率）的前提下大幅增加非线性特性，把网络做得很deep。CNN里的卷积大都是多通道的feature map和多通道的卷积核之间的操作（输入的多通道的feature map和一组卷积核做卷积求和得到一个输出的feature map），如果使用1x1的卷积核，这个操作实现的就是多个feature map的线性组合，可以实现feature map在通道个数上的变化。接在普通的卷积层的后面，配合激活函数，就可以实现network in network的结构了。</p>
+<blockquote>
+<p><strong>ref：</strong><a href="https://blog.csdn.net/wonengguwozai/java/article/details/72980828" target="_blank" rel="noopener">1X1卷积核到底有什么作用</a><br><img src="./1587537934285.png" alt="Alt text"><br><img src="./1587539479325.png" alt="Alt text"></p>
+</blockquote>
+<h3 id="1x1卷积应用"><a href="#1x1卷积应用" class="headerlink" title="1x1卷积应用"></a>1x1卷积应用</h3><ul>
+<li>用于升维或降维，通过设置filter数量灵活控制输出feature map的通道数；</li>
+<li>减少参数量，特征图filter少了，参数量也会减少；</li>
+<li>实现跨通道的交互和信息整合；</li>
+<li>对不同特征进行归一化操作；</li>
+<li>在卷积之后增加了非线性特征（添加激活函数）。<h4 id="1、升维或降维"><a href="#1、升维或降维" class="headerlink" title="1、升维或降维"></a>1、升维或降维</h4><img src="./1587632629276.png" alt="Alt text"><br>上图是一个28×28×192的feature map，我们可以使用池化层压缩它的高度和宽度。但如果通道数量很大，该如何把这个feature map压缩为28×28×32维度的层呢？可以用32个大小为1×1的卷积核(filter)，严格来讲每个filter大小都是1×1×192维，因为filter中通道数量必须与输入feature map中通道的数量保持一致。但是你使用了32个filters，输出feature map的维度为28×28×32，相对于池化层可以压缩的feature map的高度和宽度， 这即是1x1卷积实现通道数压缩(降维：GoogleNet、Inception)的方法，升维(ResNet残差模块)与之同理。1×1卷积并不会改变高度(height)和宽度(width)，只是改变height × width × channels中的 channels 这一维度的大小。<h4 id="2、增加非线性"><a href="#2、增加非线性" class="headerlink" title="2、增加非线性"></a>2、增加非线性</h4>1x1卷积核，可以在保持feature map尺度不变的（即不损失分辨率）的前提下大幅增加非线性特性（利用后接的非线性激活函数），把网络做的很deep。<h4 id="3、跨通道的交互和信息整合"><a href="#3、跨通道的交互和信息整合" class="headerlink" title="3、跨通道的交互和信息整合"></a>3、跨通道的交互和信息整合</h4>使用1x1卷积核，实现降维和升维的操作其实就是channel间信息的线性组合变化，3x3x64channels的卷积核后面添加一个1x1x28channels的卷积核，就变成了3x3x28channels的卷积核，原来的64个channels就可以理解为跨通道线性组合变成了28channels，这就是通道间的信息交互。只是在channel维度上做线性组合，高度和宽度上是共享权值的sliding window。<h4 id="4、Inception"><a href="#4、Inception" class="headerlink" title="4、Inception"></a>4、Inception</h4></li>
+</ul>
+<img src="/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/inception.png" class="" title="This is an image">
+
+<p>1×1的卷积层（可能）引起人们的重视是在NIN的结构中，论文中的想法是利用MLP代替传统的线性卷积核，从而提高网络的表达能力。文中同时利用了跨通道pooling的角度解释，认为文中提出的MLP其实等价于在传统卷积核后面接cascaded cross channel parameteric pooling层，从而实现多个feature map的线性组合，实现跨通道的信息整合。而cascaded cross channel parameteric pooling层是等价于1×1卷积的。</p>
+<p>1×1的卷积层降维和升维引起人们重视的（可能）是在GoogLeNet里。对于每一个Inception模块（如上图），原始模块是上图a，上图b是加入了1×1卷积进行降维的。虽然上图a的卷积核都比较小，但是当输入和输出的通道数很大时，乘起来也会使得卷积核参数变的很大，而上图b加入1×1卷积后可以降低输入的通道数，卷积核参数、运算复杂度也就跟着降下来了。</p>
+<p>如输入的feature map是28×28×192，Inception模块中1×1卷积通道为64，3×3卷积通道为128，5×5卷积通道为32，如果是上图a结构，那么卷积核参数为1×1×192×64+3×3×192×128+5×5×192×32，而上图b对3×3和5×5卷积层前分别加入了通道数为96和16的1×1卷积层，这样卷积核参数就变成了1×1×192×64+（1×1×192×96+3×3×96×128）+（1×1×192×16+5×5×16×32），参数大约减少到原来的三分之一。</p>
+<p>同时在并行pooling层后面加入1×1卷积层后也可以降低输出的feature map数量，上图a中pooling后feature map通道数是不变的，再加卷积层得到的feature map，会使输出的feature map通道数扩大到416，如果每个模块都这样，网络的输出会越来越大。而上图b在pooling后面加了通道数为32的1×1卷积，使得输出的feature map通道数降到了256。GoogLeNet利用1×1的卷积降维后，得到了更为紧凑的网络结构，虽然总共有22层，但是参数数量却只是8层的AlexNet的十二分之一（当然也有很大一部分原因是去掉了全连接层）。</p>
+<h4 id="5、ResNet"><a href="#5、ResNet" class="headerlink" title="5、ResNet"></a>5、ResNet</h4><img src="/2020/04/24/%E6%8F%AD%E7%A7%981x1%E5%8D%B7%E7%A7%AF/resnet.png" class="" title="This is an image">
+
+<p>ResNet同样也采用了1×1卷积，并且是在3×3卷积层的前后都使用了，不仅进行了降维，还进行了升维，参数数量进一步减少，如上图结构。其中右图又称为”bottleneck design”，为了降低参数的数量，第一个1x1的卷积把256维channel降到64维，然后在最后通过1x1卷积恢复，整体上用的参数数目：1x1x256x64 + 3x3x64x64 + 1x1x64x256 = 69632，而不使用bottleneck的话就是两个3x3x256的卷积，参数数目: 3x3x256x256x2 = 1179648，差了16.94倍。对于常规ResNet，可以用于34层或者更少的网络中，对于Bottleneck Design的ResNet通常用于更深的如101这样的网络中，目的是减少计算和参数量（实用目的）。</p>
+<p>3.对于单通道的feature map和单个卷积核之间的卷积来说,1X1卷积核就是对输入的一个比例缩放，因为1X1卷积核只有一个参数，这个核在输入上滑动，就相当于给输入数据乘以一个系数。对于多通道而言有一个重要的功能，就是可以在保持feature map 尺寸不变（即不损失分辨率）的前提下大幅增加非线性特性，把网络做得很deep。CNN里的卷积大都是多通道的feature map和多通道的卷积核之间的操作（输入的多通道的feature map和一组卷积核做卷积求和得到一个输出的feature map），如果使用1x1的卷积核，这个操作实现的就是多个feature map的线性组合，可以实现feature map在通道个数上的变化。接在普通的卷积层的后面，配合激活函数，就可以实现network in network的结构了。</p>
+<blockquote>
+<p><strong>ref：</strong><a href="http://www.caffecn.cn/?/question/136" target="_blank" rel="noopener">1X1卷积核到底有什么作用呢？</a><br><strong>ref：</strong><a href="https://arxiv.org/abs/1312.4400" target="_blank" rel="noopener">Network in network</a><br><strong>ref：</strong><a href="https://www.zhihu.com/question/56024942" target="_blank" rel="noopener">卷积神经网络中用1*1 卷积有什么作用或者好处呢？</a><br><strong>ref：</strong><a href="https://iamaaditya.github.io/2016/03/one-by-one-convolution/" target="_blank" rel="noopener">One by One 1x1 Convolution - counter-intuitively useful</a></p>
+</blockquote>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          
+          <div class="post-tags">
+              <a href="/tags/%E5%8D%B7%E7%A7%AF/" rel="tag"><i class="fa fa-tag"></i> 卷积</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item"></div>
+      <div class="post-nav-item">
+    <a href="/2020/04/26/hexo%E5%8D%9A%E5%AE%A2%E9%85%8D%E7%BD%AE/" rel="next" title="hexo博客配置">
+      hexo博客配置 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#1x1卷积应用"><span class="nav-number">1.</span> <span class="nav-text">1x1卷积应用</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#1、升维或降维"><span class="nav-number">1.1.</span> <span class="nav-text">1、升维或降维</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#2、增加非线性"><span class="nav-number">1.2.</span> <span class="nav-text">2、增加非线性</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#3、跨通道的交互和信息整合"><span class="nav-number">1.3.</span> <span class="nav-text">3、跨通道的交互和信息整合</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#4、Inception"><span class="nav-number">1.4.</span> <span class="nav-text">4、Inception</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#5、ResNet"><span class="nav-number">1.5.</span> <span class="nav-text">5、ResNet</span></a></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+          <iframe frameborder="no" border="0" marginwidth="0" marginheight="0" width=330 height=86 src="//music.163.com/outchain/player?type=2&id=566443167&auto=1&height=66"></iframe>
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="양샨"
+      src="/images/6.ico">
+  <p class="site-author-name" itemprop="name">양샨</p>
+  <div class="site-description" itemprop="description">爱咋咋地</div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives/">
+        
+          <span class="site-state-item-count">2</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author motion-element">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yshanyes" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yshanyes" rel="noopener" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+  </div>
+  <div class="cc-license motion-element" itemprop="license">
+    <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" class="cc-opacity" rel="noopener" target="_blank"><img src="/images/cc-by-nc-sa.svg" alt="Creative Commons"></a>
+  </div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2020</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">양샨</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-area"></i>
+    </span>
+      <span class="post-meta-item-text">站点总字数：</span>
+    <span title="站点总字数">11k</span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span class="post-meta-item-text">站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">10 分钟</span>
+</div>
+
+        
+<div class="busuanzi-count">
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+    <span class="post-meta-item" id="busuanzi_container_site_uv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-divider">|</span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv" style="display: none;">
+      <span class="post-meta-item-icon">
+        <i class="eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  
+  <script color='0,0,0' opacity='0.5' zIndex='-1' count='150' src="/lib/canvas-nest/canvas-nest.min.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
+<!-- 页面点击小红心 -->
+<script type="text/javascript" src="/js/clicklove.js"></script>
